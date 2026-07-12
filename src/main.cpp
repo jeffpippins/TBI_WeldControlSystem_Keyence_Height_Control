@@ -14,6 +14,7 @@ enum FreezeReason { R_NONE, R_SLEW, R_RAIL, R_ALARM, R_WAIT };
 GuardMode    mode = TRACKING;
 FreezeReason freezeReason = R_NONE;      // why we're holding (display + LED)
 int  baseline = 0;                       // last good plate reading (counts)
+int  analogValue = 0;                    // filtered ADC counts (0-1023, ~512 at target)
 int  lastDelta = 0;                      // last per-sample analog delta (diag)
 static int prevAnalog = 0;               // previous sample (for slew delta)
 static uint16_t settleCount = 0;         // samples back near baseline
@@ -70,22 +71,49 @@ static void updateAlarm() {
 }
 
 
-// --- Height judgment inputs (Keyence HIGH/LOW) ------------------------------
+// --- Height control: hybrid re-center ---------------------------------------
+// The Keyence HIGH/LOW judgments (+/-1.5 mm on the amp) START a correction and
+// set its direction; the ANALOG value decides when to STOP -- keep driving until
+// the reading is within STOP_BAND of TARGET_COUNTS, so the torch returns to ~0
+// instead of parking at the +/-1.5 mm band edge.
+// Mapping: HIGH -> UP (raise), LOW -> DOWN (lower). Swap on the bench if reversed
+// (a backwards map drives to a rail; the guard then freezes it).
 const int JUDGE_ACTIVE_LEVEL = LOW;      // pin level meaning a judgment is asserted
+const int TARGET_COUNTS      = 512;      // analog counts at the Keyence zero (~center)
+const int STOP_BAND          = 26;       // counts (~0.5 mm): stop within this of target
 bool ilHigh = false;                     // HIGH judgment active
 bool ilLow  = false;                     // LOW  judgment active
 
-// Read the HIGH/LOW judgments and drive their direction outputs.
-// Mapping: HIGH -> UP (raise), LOW -> DOWN (lower).  Swap on the bench if the
-// torch moves the wrong way.  Motion drives ONLY in auto, no alarm, and while
-// the guard is TRACKING; a guard HOLD (or alarm / not-auto) freezes both off.
 static void updateHeight() {
   ilHigh = (digitalRead(PIN_IL_HIGH) == JUDGE_ACTIVE_LEVEL);
   ilLow  = (digitalRead(PIN_IL_LOW)  == JUDGE_ACTIVE_LEVEL);
 
-  if (automode && !alarm && mode == TRACKING) {
-    digitalWrite(PIN_UP,   ilHigh ? HIGH : LOW);
-    digitalWrite(PIN_DOWN, ilLow  ? HIGH : LOW);
+  static bool correcting = false;        // latched from a HIGH/LOW trigger
+  static bool dirUp      = false;        // latched direction for this correction
+
+  // Motion only in auto, no alarm, and while the guard is TRACKING.
+  if (!(automode && !alarm && mode == TRACKING)) {
+    correcting = false;
+    digitalWrite(PIN_UP,   LOW);
+    digitalWrite(PIN_DOWN, LOW);
+    return;
+  }
+
+  // START: a Keyence judgment kicks off a correction and picks the direction.
+  if (!correcting) {
+    if      (ilHigh) { correcting = true; dirUp = true;  }
+    else if (ilLow)  { correcting = true; dirUp = false; }
+  }
+
+  // STOP: once the analog is back within STOP_BAND of center.
+  if (correcting && abs(analogValue - TARGET_COUNTS) <= STOP_BAND) {
+    correcting = false;
+  }
+
+  // DRIVE the latched direction (interlocked: never both), else hold.
+  if (correcting) {
+    digitalWrite(PIN_UP,   dirUp ? HIGH : LOW);
+    digitalWrite(PIN_DOWN, dirUp ? LOW  : HIGH);
   } else {
     digitalWrite(PIN_UP,   LOW);
     digitalWrite(PIN_DOWN, LOW);
@@ -95,7 +123,7 @@ static void updateHeight() {
 
 // --- Analog input (Keyence IL-1000 0-5V distance) ---------------------------
 const uint8_t ANALOG_SAMPLES = 100;      // reads per sample, median-filtered
-int analogValue = 0;                     // filtered ADC counts (0-1023, ~512 at target)
+// (analogValue is declared with the guard state near the top of the file.)
 
 // Take ANALOG_SAMPLES reads of A7 and return their median (rejects noise/spikes).
 // ~20 x 100us = ~2 ms, well within the loop cadence. Even count -> average the
@@ -266,7 +294,9 @@ static void printStatus() {
   Serial.print(F(" base:")); print4(baseline);
   Serial.print(F(" d:"));    Serial.print(lastDelta < 0 ? '-' : '+');
   print4(abs(lastDelta));
-  Serial.print(F(" sc:"));   print4(stepCount);
+  int err = analogValue - TARGET_COUNTS;
+  Serial.print(F(" err:"));  Serial.print(err < 0 ? '-' : '+');
+  print4(abs(err));
   Serial.print(F("  "));                 // small pad
 }
 

@@ -7,8 +7,8 @@
 
 // --- Inputs -----------------------------------------------------------------
 #define PIN_ENABLE     3    // D3  - auto-mode momentary button (active-low)
-#define PIN_IL_LOW     A0   // A0  - Keyence IL-1000 LOW  judgment
-#define PIN_IL_HIGH    A1   // A1  - Keyence IL-1000 HIGH judgment
+#define PIN_IL_HIGH    A0   // A0  - Keyence IL-1000 HIGH judgment
+#define PIN_IL_LOW     A1   // A1  - Keyence IL-1000 LOW  judgment
 #define PIN_IL_ALARM   A2   // A2  - Keyence IL-1000 ALARM / system-OK
 #define PIN_IL_ANALOG  A7   // A7  - Keyence IL-1000 0-5V analog out (ADC only)
 
