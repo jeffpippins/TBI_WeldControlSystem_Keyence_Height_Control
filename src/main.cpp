@@ -21,6 +21,14 @@ static uint16_t settleCount = 0;         // samples back near baseline
 static uint16_t stepCount   = 0;         // samples a new level has persisted
 
 const int      SLEW_THRESH  = 8;         // counts/sample: above = fast artifact
+                                         // Must sit ABOVE the per-sample delta from
+                                         // the commanded slide, not just below the
+                                         // tack edge (14-140 c/sample). The guard can't
+                                         // tell self-commanded motion from a disturbance.
+                                         // At 12 in/min / 51 counts-per-mm / 20 ms the
+                                         // slide alone is ~5.2 c/sample -> ~1.5x margin.
+                                         // Re-check if slide speed >~18 in/min or the
+                                         // IL-1000 analog window is rescaled tighter.
 const int      RETURN_TOL   = 50;        // counts (~1 mm) within baseline = "returned"
 const uint8_t  SETTLE       = 3;         // samples near baseline before resume
 const uint16_t STEP_CONFIRM = 350;       // ~7 s: accept a permanent new level
@@ -126,7 +134,7 @@ const uint8_t ANALOG_SAMPLES = 100;      // reads per sample, median-filtered
 // (analogValue is declared with the guard state near the top of the file.)
 
 // Take ANALOG_SAMPLES reads of A7 and return their median (rejects noise/spikes).
-// ~20 x 100us = ~2 ms, well within the loop cadence. Even count -> average the
+// ~100 x 100us = ~10 ms, well within the loop cadence. Even count -> average the
 // two middle samples.
 static int readAnalogMedian() {
   int s[ANALOG_SAMPLES];

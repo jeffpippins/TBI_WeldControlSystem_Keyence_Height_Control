@@ -90,7 +90,14 @@ Each scan: `delta = analogValue - prevAnalog`.
 - 51 counts/mm, 0.02 mm/count; ±10 mm analog window.
 - Sampling geometry: `samples/inch = 3000 / travel-in-min`; at 50 ipm ≈ 0.42 mm/sample.
 - Tacks 3/16"–1/4" (4.76–6.35 mm) → ~240–325 counts off baseline; edge ~14–140 c/sample.
-- Real warp ≈ 0.4 c/sample. `SLEW_THRESH` sits between warp and tack-edge.
+- **Vertical slide (self-commanded motion):** 12 ipm = 5.08 mm/s → ~5.2 c/sample at
+  20 ms. The guard can't distinguish this from a disturbance, so `SLEW_THRESH` must
+  bracket real warp (~0.4) **and** slide motion (~5.2) *below* it and the tack edge
+  (14–140) *above* it. At the current 8-count trip that's only a ~1.5× margin over the
+  slide — **re-check if slide speed exceeds ~18 ipm or the analog window is rescaled to
+  more counts/mm** (either raises the slide's c/sample and can trip the controller's own
+  corrections → stutter, D4 blinking during normal moves).
+- Real warp ≈ 0.4 c/sample. `SLEW_THRESH` sits between warp/slide-motion and the tack-edge.
 - Set `SLEW_THRESH` from the `d:` field: max `d:` while stationary (noise floor) vs
   the `d:` spike on a real tack; pick a value between.
 
