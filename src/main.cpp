@@ -20,15 +20,19 @@ static int prevAnalog = 0;               // previous sample (for slew delta)
 static uint16_t settleCount = 0;         // samples back near baseline
 static uint16_t stepCount   = 0;         // samples a new level has persisted
 
-const int      SLEW_THRESH  = 8;         // counts/sample: above = fast artifact
-                                         // Must sit ABOVE the per-sample delta from
-                                         // the commanded slide, not just below the
-                                         // tack edge (14-140 c/sample). The guard can't
-                                         // tell self-commanded motion from a disturbance.
-                                         // At 12 in/min / 51 counts-per-mm / 20 ms the
-                                         // slide alone is ~5.2 c/sample -> ~1.5x margin.
-                                         // Re-check if slide speed >~18 in/min or the
-                                         // IL-1000 analog window is rescaled tighter.
+const int      SLEW_THRESH  = 40;        // counts/sample: above = fast artifact
+                                         // Bench-tuned (2026-07). The laser rides the
+                                         // JOINT GROOVE; on multipass welds that surface
+                                         // is a prior bead, and its ripple tripped
+                                         // constant false HLD-S freezes at the original
+                                         // value of 8. 40 (~0.8 mm/sample) sits above
+                                         // bead ripple and the commanded slide
+                                         // (~5.2 c/sample @ 12 in/min) while remaining
+                                         // below a sharp tack/step edge (up to ~140
+                                         // c/sample). Trade-off: edges slower than
+                                         // ~40 c/sample no longer freeze -- root-pass
+                                         // tacks are assumed sharp. Re-check if the
+                                         // IL-1000 analog window is rescaled.
 const int      RETURN_TOL   = 50;        // counts (~1 mm) within baseline = "returned"
 const uint8_t  SETTLE       = 3;         // samples near baseline before resume
 const uint16_t STEP_CONFIRM = 350;       // ~7 s: accept a permanent new level

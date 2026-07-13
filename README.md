@@ -95,7 +95,7 @@ timing/threshold tunables and signal polarities are `const`s near the top of
 | `SCAN_MS` | 20 | control-loop period (ms) |
 | `DEBOUNCE_MS` | 30 | button must settle this long before a toggle |
 | `ANALOG_SAMPLES` | 100 | reads per sample, median-filtered |
-| `SLEW_THRESH` | 8 | **CALIBRATE** — counts/sample above which a change is a fast artifact (see note below) |
+| `SLEW_THRESH` | 40 | **CALIBRATE** — counts/sample above which a change is a fast artifact (see note below) |
 | `RETURN_TOL` | 50 | **CALIBRATE** — counts within baseline (~1 mm) that count as "returned" |
 | `SETTLE` | 3 | samples back near baseline before resuming |
 | `STEP_CONFIRM` | 350 | ~7 s; a new level held this long is a real step |
@@ -111,15 +111,18 @@ timing/threshold tunables and signal polarities are `const`s near the top of
 so the 350-sample (~7 s at 20 ms) default has margin. Retune if travel drops
 below 20 in/min.
 
-`SLEW_THRESH` has an upper *and* lower bound. The guard can't tell the controller's
-own commanded slide motion from an external disturbance, so the threshold must sit
-**above** the per-sample analog change the slide produces while correcting — at
-12 in/min with the ~51 counts/mm analog scaling that's ~5.2 counts/sample, so the
-8-count default has only ~1.5× margin — while staying **below** the tack-edge delta
-(~14–140 counts/sample). Re-check it if the slide speed exceeds ~18 in/min or the
-IL-1000 analog window is rescaled to more counts/mm; otherwise the controller can
-start freezing its own corrections (stutter, with the D4 LED blinking during normal
-moves).
+`SLEW_THRESH` has an upper *and* lower bound. The lower bound is set by everything
+the guard must **ignore**: the controller's own commanded slide motion
+(~5.2 counts/sample at 12 in/min with ~51 counts/mm scaling) and — the dominant
+term in practice — **weld-bead ripple**. The laser rides the joint groove, and on
+multipass welds that surface is a prior bead; its ripple produced constant false
+`HLD-S` freezes at the original 8-count value. The bench-tuned default of **40**
+(~0.8 mm/sample) sits above bead ripple while staying below a sharp tack/step edge
+(up to ~140 counts/sample). Trade-off: edges slower than ~40 counts/sample no
+longer trip the slew guard — root-pass tacks are assumed sharp. Re-check the value
+if the IL-1000 analog window is rescaled (it changes counts/mm, which scales every
+delta), and watch the `d:` status field during a normal pass: it should stay
+comfortably below the threshold.
 
 If UP/DOWN drive the torch the wrong way, swap the `PIN_UP`/`PIN_DOWN` mapping in
 `updateHeight()` (a backwards map drives to a rail; the guard then freezes it).

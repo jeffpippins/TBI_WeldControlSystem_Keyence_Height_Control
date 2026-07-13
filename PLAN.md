@@ -72,7 +72,7 @@ Each scan: `delta = analogValue - prevAnalog`.
 | `SCAN_MS` | 20 | loop period (50 Hz) |
 | `ANALOG_SAMPLES` | 100 | median filter width |
 | `DEBOUNCE_MS` | 30 | button debounce |
-| `SLEW_THRESH` | 8 | counts/sample (~0.16 mm/samp, ~7.8 mm/s) freeze trip |
+| `SLEW_THRESH` | 40 | counts/sample (~0.8 mm/samp) freeze trip — bench-tuned, see below |
 | `RETURN_TOL` | 50 | counts (~1 mm) to count as "returned to baseline" |
 | `SETTLE` | 3 | samples near baseline before resume (60 ms) |
 | `STEP_CONFIRM` | 350 | samples (~7 s) to accept a permanent new level (> ~6 s max tack) |
@@ -92,14 +92,19 @@ Each scan: `delta = analogValue - prevAnalog`.
 - Tacks 3/16"–1/4" (4.76–6.35 mm) → ~240–325 counts off baseline; edge ~14–140 c/sample.
 - **Vertical slide (self-commanded motion):** 12 ipm = 5.08 mm/s → ~5.2 c/sample at
   20 ms. The guard can't distinguish this from a disturbance, so `SLEW_THRESH` must
-  bracket real warp (~0.4) **and** slide motion (~5.2) *below* it and the tack edge
-  (14–140) *above* it. At the current 8-count trip that's only a ~1.5× margin over the
-  slide — **re-check if slide speed exceeds ~18 ipm or the analog window is rescaled to
-  more counts/mm** (either raises the slide's c/sample and can trip the controller's own
-  corrections → stutter, D4 blinking during normal moves).
-- Real warp ≈ 0.4 c/sample. `SLEW_THRESH` sits between warp/slide-motion and the tack-edge.
-- Set `SLEW_THRESH` from the `d:` field: max `d:` while stationary (noise floor) vs
-  the `d:` spike on a real tack; pick a value between.
+  sit above it.
+- **Weld-bead ripple (the dominant term):** the laser rides the joint groove, and on
+  multipass welds that surface is a prior bead. Its ripple produced constant false
+  `HLD-S` freezes at the original 8-count value during normal welding. `SLEW_THRESH`
+  was bench-tuned to **40** (2026-07): above bead ripple + slide motion, below a sharp
+  tack/step edge (up to ~140 c/sample).
+- Trade-off at 40: edges slower than ~40 c/sample no longer trip the slew guard —
+  root-pass tacks are assumed sharp. The rail and alarm freezes are unaffected.
+- Real warp ≈ 0.4 c/sample; it never approaches the threshold.
+- Retune from the `d:` field: max `d:` during a *normal pass over a prior bead*
+  (must stay below threshold) vs the `d:` spike on a real tack (must stay above);
+  pick a value between. **Re-check if the IL-1000 analog window is rescaled to more
+  counts/mm** (it scales every delta).
 
 ## Open items
 - **Alarm logic/polarity** (`updateAlarm`) — verify at bench, incl. the fail-safe
